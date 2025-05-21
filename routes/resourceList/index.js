@@ -73,8 +73,6 @@ exports.getResourceData = async (req, res) => {
       }
       workerListMap[worker.worker_id].push(worker); 
     });
-    console.log(rowListResults,workerListResults);
-    console.log(rowListMap,workerListMap);
     // 第四步：将 rowList 和 workerList 数据合并到 resource 数据中
     const combinedResults = resourceResults.map(resource => {
       return {

@@ -71,8 +71,6 @@ exports.getPurchaseData = async (req, res) => {
     params.push(parsedPageSize+'', offset+'');
 
     // 输出最终的 SQL 语句和参数
-    console.log('最终 SQL:', sql);
-    console.log('最终 SQL 参数:', params);
     const [results] = await db.execute(sql, params);
 
     res.send({
