@@ -12,7 +12,12 @@ router.post('/editPurchaseData', orderList.editPurchaseData)//修改订单
 router.post('/deletePurchaseData', orderList.deletePurchaseData)//删除订单
 router.post('/getSchedulingData', scheduling.getSchedulingData)//查询排产
 router.post('/getResourceData', resourceRouter.getResourceData)//设备管理数据
-
+router.post('/updateResourceStatus', resourceRouter.updateResourceStatus)//修改设备状态
+router.post('/updateRowStatus', resourceRouter.updateRowStatus)//修改人员状态
+router.post('/updateResourceAndWorkerStatus', resourceRouter.updateResourceAndWorkerStatus)//修改设备状态并同步更新员工状态
+router.post('/updateWorkerNum', resourceRouter.updateWorkerNum)//修改材料数量
+router.post('/addWorker', resourceRouter.addWorker)//添加工人
+router.post('/deleteWorker', resourceRouter.deleteWorker)//删除工人
 
 
 module.exports = router;
