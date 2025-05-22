@@ -1,7 +1,7 @@
 // 导入数据库模块
 const db = require("../../db/index");
 
-// 资源管理接口，查询 resource 表数据并返回关联的 rowList 和 workerList 数据
+// 设备管理接口，查询 resource 表数据并返回关联的 rowList 和 workerList 数据
 exports.getResourceData = async (req, res) => {
   try {
     // 获取分页参数并确保是数字类型
@@ -522,3 +522,75 @@ exports.deleteWorker = async (req, res) => {
     });
   }
 };
+
+
+//查询原材料总数
+exports.getRawMaterialCount = async (req, res) => {
+  try {
+    //查询表格所有数据
+    const [result] = await db.query('SELECT * FROM totalrawmaterials');
+    if (!result || result.length === 0) {
+      return res.status(404).send({
+        status: 1,
+        message: '未找到数据'
+      });
+    };
+    res.send({
+      status: 0,
+      message: '查询成功',
+      data: result
+    });
+    
+  } catch (err) {
+    console.error('错误信息:', err);
+    res.status(500).send({
+        status: 1,
+        message: '查询原材料总数时发生错误',
+        error: err.message
+    })
+  }
+}
+
+//修改原材料总数
+exports.updateRawMaterialCount = async (req, res) => { 
+  try {
+    const rawArrayList = req.body;
+
+    if (!Array.isArray(rawArrayList) || rawArrayList.length === 0) {
+      return res.status(400).send({
+        status: 1,
+        message: '参数必须是非空数组',
+      });
+    }
+
+    const connection = await db.getConnection();
+    await connection.beginTransaction(); // 开启事务
+
+    try {
+      for (const item of rawArrayList) {
+        const { id, total } = item;
+        if (!id || total === undefined) {
+          throw new Error(`缺少必要参数 id 或 total，数据: ${JSON.stringify(item)}`);
+        }
+
+        const sql = `UPDATE totalrawmaterials SET total = ? WHERE id = ?`;
+        await connection.execute(sql, [total, id]);
+      }
+
+      await connection.commit(); // 提交事务
+      res.send({ status: 0, message: '更新成功' });
+    } catch (batchErr) {
+      await connection.rollback(); // 回滚事务
+      throw batchErr;
+    } finally {
+      connection.release(); // 释放连接
+    }
+  } catch (err) {
+    console.error('错误信息:', err);
+    res.status(500).send({
+      status: 1,
+      message: '批量修改原材料总数时发生错误',
+      error: err.message
+    });
+  }
+}

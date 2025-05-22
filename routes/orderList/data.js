@@ -102,13 +102,13 @@ exports.getPurchaseData = async (req, res) => {
 // 新增表格数据，表格是 purchase-订单数据
 exports.addPurchaseData = async (req, res) => {
   try {
-    const { name, order_no, quantity, due_data, status, priority } = req.body;
+    const { name, order_no, quantity, due_data, status, priority, type } = req.body;
 
     // 验证必要参数
-    if (!name || !order_no || !quantity || !due_data || !status || !priority) {
+    if (!name || !order_no || !quantity || !due_data || !status || !priority || !type) {
       return res.send({
         status: 1,
-        message: '缺少必要参数，请检查 name, order_no, quantity, due_data, status, priority',
+        message: '缺少必要参数，请检查 name, order_no, quantity, due_data, status, priority,type',
       });
     }
 
@@ -116,8 +116,8 @@ exports.addPurchaseData = async (req, res) => {
     const product_id = Math.floor(Math.random() * 11);
 
     // 构建插入 SQL 语句
-    const sql = `INSERT INTO purchase (name, order_no, product_id, quantity, due_data, status, priority) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-    const params = [name, order_no, product_id, quantity, due_data, status, priority];
+    const sql = `INSERT INTO purchase (name, order_no, product_id, quantity, due_data, status, priority, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const params = [name, order_no, product_id, quantity, due_data, status, priority, type];
 
     // 执行插入操作
     const [result] = await db.execute(sql, params);
@@ -190,13 +190,13 @@ exports.deletePurchaseData = async (req, res) => {
 // 编辑表格数据，表格是 purchase-订单数据
 exports.editPurchaseData = async (req, res) => {
   try {
-    const { order_no, name, quantity, due_data, status, priority } = req.body;
+    const { order_no, name, quantity, due_data, status, priority, type } = req.body;
 
     // 验证必要参数
-    if (!order_no || !name || !quantity || !due_data || !status || !priority) {
+    if (!order_no || !name || !quantity || !due_data || !status || !priority || !type) {
       return res.send({
         status: 1,
-        message: '缺少必要参数，请检查 order_no, name, quantity, due_data, status, priority',
+        message: '缺少必要参数，请检查 order_no, name, quantity, due_data, status, priority, type',
       });
     }
 
@@ -205,9 +205,9 @@ exports.editPurchaseData = async (req, res) => {
 
     // 构建更新 SQL 语句
     const sql = `UPDATE purchase 
-                 SET name = ?, product_id = ?, quantity = ?, due_data = ?, status = ?, priority = ? 
+                 SET name = ?, product_id = ?, quantity = ?, due_data = ?, status = ?, priority = ?, type = ? 
                  WHERE order_no = ?`;
-    const params = [name, product_id, quantity, due_data, status, priority, order_no];
+    const params = [name, product_id, quantity, due_data, status, priority, type,  order_no];
 
     // 执行更新操作
     const [result] = await db.execute(sql, params);

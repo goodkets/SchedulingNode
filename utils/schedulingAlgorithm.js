@@ -22,6 +22,7 @@ function schedulingAlgorithm(orders, devices) {
     // 初始化种群
     function initializePopulation(orders, devices) {
         const availableDevices = getAvailableDevices();
+        console.log(availableDevices,1111);
         const population = [];
         for (let i = 0; i < POP_SIZE; i++) {
             const individual = [];
@@ -165,30 +166,67 @@ function schedulingAlgorithm(orders, devices) {
         return `${year}-${month}-${day}`;
     }
 
-    return bestIndividual.map(schedule => {
+    // 获取运行中的设备
+    const availableDevices = getAvailableDevices();
+    
+    // 将订单按优先级排序
+    const sortedSchedules = bestIndividual.map(schedule => {
         const order = orders.find(o => o.id === schedule.orderId);
         const device = devices.find(d => d.id === schedule.deviceId);
         const process = PROCESS_LIST.find(p => p.id === schedule.processId);
         const startTime = formatDate(schedule.startTime);
         const endTime = formatDate(schedule.startTime + process.duration);
         
-        // 根据订单优先级设置 status
-        let status;
-        if (order.priority === '1') {
-            status = 1;
-        } else if (order.priority === '0') {
-            status = 0;
-        } else {
-            status = -1;
-        }
-
         return {
+            orderId: order.id,
             name: `${order.name}`,
             start_time: startTime,
             end_time: endTime,
-            status: status,
+            priority: order.priority,
             process: process.name,
-            device: device.name
+            device: device.name,
+            deviceId: device.id
+        };
+    }).sort((a, b) => b.priority - a.priority); // 按优先级降序排序
+
+    // 创建设备与订单的映射关系
+    const deviceOrderMap = {};
+    
+    // 为每个可用设备分配一个优先级最高的订单
+    availableDevices.forEach(device => {
+        // 找到尚未分配且与当前设备匹配的最高优先级订单
+        const matchingSchedule = sortedSchedules.find(schedule => 
+            schedule.deviceId === device.id && !deviceOrderMap[device.id]
+        );
+        
+        if (matchingSchedule) {
+            deviceOrderMap[device.id] = matchingSchedule.orderId;
+        }
+    });
+
+    // 返回最终结果，根据设备分配状态设置status
+    return sortedSchedules.map(schedule => {
+        // 检查该订单是否被分配给了运行中的设备
+        const isRunning = Object.entries(deviceOrderMap).some(([deviceId, orderId]) => 
+            orderId === schedule.orderId
+        );
+
+        let status;
+        if (isRunning) {
+            status = 1; // 运行中
+        } else if (schedule.priority === '0') {
+            status = 0; // 等待中
+        } else {
+            status = -1; // 其他状态
+        }
+
+        return {
+            name: schedule.name,
+            start_time: schedule.start_time,
+            end_time: schedule.end_time,
+            status: status,
+            process: schedule.process,
+            device: schedule.device
         };
     });
 }
