@@ -22,6 +22,7 @@ router.post('/deleteWorker', resourceRouter.deleteWorker)//删除工人
 router.post('/getRawMaterialCount', resourceRouter.getRawMaterialCount)//原材料总数查询
 router.post('/updateRawMaterialCount', resourceRouter.updateRawMaterialCount)//修改原材料数量
 router.post("/orderProgress", dashboard.orderProgress)//订单进度
+router.post("/manualExecuteSqlWrite", scheduling.manualExecuteSqlWrite)//手动执行SQL写入
 
 module.exports = router;
 

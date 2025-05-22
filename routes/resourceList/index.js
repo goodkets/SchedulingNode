@@ -137,7 +137,6 @@ exports.updateResourceStatus = async (req, res) => {
         message: '更新失败，未找到对应资源'
       });
     }
-    
     res.send({
       status: 0,
       message: '资源状态更新成功',
@@ -412,7 +411,9 @@ exports.updateResourceAndWorkerStatus = async (req, res) => {
       
       // 提交事务
       await connection.commit();
-      
+          // 导入手动执行 SQL 写入的方法
+    const { manualExecuteSqlWrite } = require('../scheduling/index');
+    await manualExecuteSqlWrite(req, res);
       res.send({
         status: 0,
         message: '资源和员工状态更新成功',

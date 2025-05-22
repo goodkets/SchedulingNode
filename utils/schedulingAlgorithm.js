@@ -14,18 +14,19 @@ function schedulingAlgorithm(orders, devices) {
         { id: 4, name: '组装', duration: 10 }
     ];
 
-    // 获取可用设备
+    // 获取可用设备，筛选出状态为 'true' 的设备
     function getAvailableDevices() {
         return devices.filter(device => device.status == 'true');
     }
 
-    // 初始化种群
+    // 初始化种群，为每个订单随机分配设备、工序和开始时间
     function initializePopulation(orders, devices) {
         const availableDevices = getAvailableDevices();
-        console.log(availableDevices,1111);
         const population = [];
+        // 生成 POP_SIZE 个个体
         for (let i = 0; i < POP_SIZE; i++) {
             const individual = [];
+            // 为每个订单分配设备、工序和开始时间
             orders.forEach(order => {
                 if (availableDevices.length === 0) {
                     return;
@@ -48,12 +49,14 @@ function schedulingAlgorithm(orders, devices) {
     // 适应度函数：计算总生产时间，时间越短适应度越高，同时考虑交付时间
     function fitnessFunction(individual) {
         const deviceSchedules = {};
+        // 初始化每个设备的调度列表
         devices.forEach(device => {
             deviceSchedules[device.id] = [];
         });
 
         let totalDueDatePenalty = 0;
 
+        // 计算每个订单的结束时间和交付时间惩罚
         individual.forEach(schedule => {
             const deviceId = schedule.deviceId;
             const order = orders.find(order => order.id === schedule.orderId);
@@ -76,6 +79,7 @@ function schedulingAlgorithm(orders, devices) {
         });
 
         let maxEndTime = 0;
+        // 找出所有设备中最晚的结束时间
         Object.values(deviceSchedules).forEach(schedules => {
             schedules.sort((a, b) => a.endTime - b.endTime);
             const lastSchedule = schedules[schedules.length - 1];
@@ -89,13 +93,14 @@ function schedulingAlgorithm(orders, devices) {
         return 1 / (totalFitness + 1); // 适应度值
     }
 
-    // 选择操作：轮盘赌选择
+    // 选择操作：轮盘赌选择，根据适应度值选择个体进入下一代
     function selection(population) {
         const fitnessValues = population.map(individual => fitnessFunction(individual));
         const totalFitness = fitnessValues.reduce((sum, fitness) => sum + fitness, 0);
         const probabilities = fitnessValues.map(fitness => fitness / totalFitness);
 
         const selectedPopulation = [];
+        // 选择 POP_SIZE 个个体
         for (let i = 0; i < POP_SIZE; i++) {
             let r = Math.random();
             let cumulativeProbability = 0;
@@ -110,7 +115,7 @@ function schedulingAlgorithm(orders, devices) {
         return selectedPopulation;
     }
 
-    // 交叉操作：单点交叉
+    // 交叉操作：单点交叉，生成新的个体
     function crossover(parent1, parent2) {
         const crossoverPoint = Math.floor(Math.random() * parent1.length);
         const child1 = parent1.slice(0, crossoverPoint).concat(parent2.slice(crossoverPoint));
@@ -124,6 +129,7 @@ function schedulingAlgorithm(orders, devices) {
         if (availableDevices.length === 0) {
             return individual;
         }
+        // 以 MUTATION_RATE 的概率对每个工序进行变异
         individual.forEach(schedule => {
             if (Math.random() < MUTATION_RATE) {
                 if (Math.random() < 0.5) {
@@ -136,11 +142,12 @@ function schedulingAlgorithm(orders, devices) {
         return individual;
     }
 
-    // 主循环
+    // 主循环，迭代 GENERATIONS 次
     let population = initializePopulation(orders, devices); // 修正调用参数
     for (let generation = 0; generation < GENERATIONS; generation++) {
         const selectedPopulation = selection(population);
         const newPopulation = [];
+        // 生成新的种群
         for (let i = 0; i < POP_SIZE; i += 2) {
             const parent1 = selectedPopulation[i];
             const parent2 = selectedPopulation[i + 1];
@@ -151,12 +158,12 @@ function schedulingAlgorithm(orders, devices) {
         population = newPopulation;
     }
 
-    // 选择最优个体
+    // 选择最优个体，即适应度最高的个体
     const bestIndividual = population.reduce((best, current) => {
         return fitnessFunction(current) > fitnessFunction(best) ? current : best;
     });
 
-    // 时间格式化函数
+    // 时间格式化函数，将时间戳转换为 'YYYY-MM-DD' 格式的日期
     function formatDate(timestamp) {
         const baseDate = new Date(); // 从当前日期开始计算
         const newDate = new Date(baseDate.getTime() + timestamp * 24 * 60 * 60 * 1000);
@@ -166,67 +173,33 @@ function schedulingAlgorithm(orders, devices) {
         return `${year}-${month}-${day}`;
     }
 
-    // 获取运行中的设备
-    const availableDevices = getAvailableDevices();
-    
-    // 将订单按优先级排序
-    const sortedSchedules = bestIndividual.map(schedule => {
+    return bestIndividual.map((schedule, index) => {
         const order = orders.find(o => o.id === schedule.orderId);
         const device = devices.find(d => d.id === schedule.deviceId);
         const process = PROCESS_LIST.find(p => p.id === schedule.processId);
         const startTime = formatDate(schedule.startTime);
         const endTime = formatDate(schedule.startTime + process.duration);
         
+        // 获取可用设备数量
+        const availableDevices = getAvailableDevices();
+        const availableDeviceCount = availableDevices.length;
+
+        let status;
+        if (index < availableDeviceCount) {
+            // 前 availableDeviceCount 个分配为进行中状态
+            status = 0;
+        } else {
+            // 随机分配 1 或 -1 状态
+            status = Math.random() < 0.5 ? 1 : -1;
+        }
+
         return {
-            orderId: order.id,
             name: `${order.name}`,
             start_time: startTime,
             end_time: endTime,
-            priority: order.priority,
-            process: process.name,
-            device: device.name,
-            deviceId: device.id
-        };
-    }).sort((a, b) => b.priority - a.priority); // 按优先级降序排序
-
-    // 创建设备与订单的映射关系
-    const deviceOrderMap = {};
-    
-    // 为每个可用设备分配一个优先级最高的订单
-    availableDevices.forEach(device => {
-        // 找到尚未分配且与当前设备匹配的最高优先级订单
-        const matchingSchedule = sortedSchedules.find(schedule => 
-            schedule.deviceId === device.id && !deviceOrderMap[device.id]
-        );
-        
-        if (matchingSchedule) {
-            deviceOrderMap[device.id] = matchingSchedule.orderId;
-        }
-    });
-
-    // 返回最终结果，根据设备分配状态设置status
-    return sortedSchedules.map(schedule => {
-        // 检查该订单是否被分配给了运行中的设备
-        const isRunning = Object.entries(deviceOrderMap).some(([deviceId, orderId]) => 
-            orderId === schedule.orderId
-        );
-
-        let status;
-        if (isRunning) {
-            status = 1; // 运行中
-        } else if (schedule.priority === '0') {
-            status = 0; // 等待中
-        } else {
-            status = -1; // 其他状态
-        }
-
-        return {
-            name: schedule.name,
-            start_time: schedule.start_time,
-            end_time: schedule.end_time,
             status: status,
-            process: schedule.process,
-            device: schedule.device
+            process: process.name,
+            device: device.name
         };
     });
 }

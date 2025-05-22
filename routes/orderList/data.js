@@ -123,6 +123,9 @@ exports.addPurchaseData = async (req, res) => {
     const [result] = await db.execute(sql, params);
 
     if (result.affectedRows === 1) {
+      // 导入手动执行 SQL 写入的方法
+      const { manualExecuteSqlWrite } = require('../scheduling/index');
+      await manualExecuteSqlWrite(req, res);
       res.send({
         status: 0,
         message: '数据新增成功',
