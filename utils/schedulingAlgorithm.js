@@ -4,7 +4,7 @@ function schedulingAlgorithm(orders, devices) {
     const POP_SIZE = 50; // 种群大小
     const GENERATIONS = 100; // 迭代次数
     const MUTATION_RATE = 0.01; // 变异率
-    const DUE_DATE_WEIGHT = 0.5; // 交付时间权重，可根据实际情况调整
+    const DUE_DATE_WEIGHT = 0.5; // 交付时间权重
 
     // 定义工序列表及对应的持续时间
     const PROCESS_LIST = [
@@ -14,26 +14,36 @@ function schedulingAlgorithm(orders, devices) {
         { id: 4, name: '组装', duration: 10 }
     ];
 
-    // 获取可用设备，筛选出状态为 'true' 的设备
-    function getAvailableDevices() {
-        return devices.filter(device => device.status == 'true');
+    // 获取匹配的设备，根据订单名称匹配机床，并且考虑机床类型
+    function getMatchingDevices(orderName, orderType) {
+        // 首先根据订单名称匹配机床
+        const nameMatchDevices = devices.filter(device => 
+            device.name.includes(orderName)
+        );
+        
+        // 如果找到了匹配名称的设备，返回这些设备
+        if (nameMatchDevices.length > 0) {
+            return nameMatchDevices;
+        }
+        
+        // 如果没有找到匹配名称的设备，则根据类型匹配
+        return devices.filter(device => 
+            device.type === orderType
+        );
     }
 
-    // 初始化种群，为每个订单随机分配设备、工序和开始时间
+    // 初始化种群，为每个订单分配匹配类型的设备
     function initializePopulation(orders, devices) {
-        const availableDevices = getAvailableDevices();
         const population = [];
-        // 生成 POP_SIZE 个个体
         for (let i = 0; i < POP_SIZE; i++) {
             const individual = [];
-            // 为每个订单分配设备、工序和开始时间
             orders.forEach(order => {
-                if (availableDevices.length === 0) {
-                    return;
-                }
-                const device = availableDevices[Math.floor(Math.random() * availableDevices.length)];
+                const matchingDevices = getMatchingDevices(order.name, order.type);
+                if (matchingDevices.length === 0) return;
+                
+                const device = matchingDevices[Math.floor(Math.random() * matchingDevices.length)];
                 const process = PROCESS_LIST[Math.floor(Math.random() * PROCESS_LIST.length)];
-                const startTime = Math.floor(Math.random() * 100); // 随机开始时间
+                const startTime = Math.floor(Math.random() * 100);
                 individual.push({
                     orderId: order.id,
                     processId: process.id,
@@ -46,162 +56,167 @@ function schedulingAlgorithm(orders, devices) {
         return population;
     }
 
-    // 适应度函数：计算总生产时间，时间越短适应度越高，同时考虑交付时间
+    // 适应度函数
     function fitnessFunction(individual) {
         const deviceSchedules = {};
-        // 初始化每个设备的调度列表
-        devices.forEach(device => {
-            deviceSchedules[device.id] = [];
-        });
+        devices.forEach(device => deviceSchedules[device.id] = []);
 
         let totalDueDatePenalty = 0;
+        let conflictPenalty = 0;
 
-        // 计算每个订单的结束时间和交付时间惩罚
         individual.forEach(schedule => {
             const deviceId = schedule.deviceId;
-            const order = orders.find(order => order.id === schedule.orderId);
-            const device = devices.find(d => d.id === deviceId);
-            if (!order || !device) {
-                return;
-            }
+            const order = orders.find(o => o.id === schedule.orderId);
             const process = PROCESS_LIST.find(p => p.id === schedule.processId);
-            const processDuration = process.duration;
-            const endTime = schedule.startTime + processDuration;
-            deviceSchedules[deviceId].push({ startTime: schedule.startTime, endTime });
+            
+            if (!order || !process) return;
 
-            // 计算交付时间惩罚
+            const endTime = schedule.startTime + process.duration;
+            deviceSchedules[deviceId].push({ 
+                startTime: schedule.startTime, 
+                endTime,
+                orderId: schedule.orderId
+            });
+
+            // 交付时间惩罚
             const dueDate = new Date(order.due_data);
             const endDate = new Date(new Date().getTime() + endTime * 24 * 60 * 60 * 1000);
             const daysLeft = Math.ceil((dueDate - endDate) / (1000 * 60 * 60 * 24));
-            if (daysLeft < 0) {
-                totalDueDatePenalty += Math.abs(daysLeft);
+            if (daysLeft < 0) totalDueDatePenalty += Math.abs(daysLeft);
+        });
+
+        // 设备冲突检测
+        Object.values(deviceSchedules).forEach(schedules => {
+            schedules.sort((a, b) => a.startTime - b.startTime);
+            for (let i = 1; i < schedules.length; i++) {
+                if (schedules[i].startTime < schedules[i-1].endTime) {
+                    conflictPenalty += (schedules[i-1].endTime - schedules[i].startTime);
+                }
             }
         });
 
         let maxEndTime = 0;
-        // 找出所有设备中最晚的结束时间
         Object.values(deviceSchedules).forEach(schedules => {
-            schedules.sort((a, b) => a.endTime - b.endTime);
-            const lastSchedule = schedules[schedules.length - 1];
-            if (lastSchedule && lastSchedule.endTime > maxEndTime) {
-                maxEndTime = lastSchedule.endTime;
-            }
+            const last = schedules[schedules.length - 1];
+            if (last && last.endTime > maxEndTime) maxEndTime = last.endTime;
         });
 
-        // 综合考虑总生产时间和交付时间惩罚
-        const totalFitness = maxEndTime + DUE_DATE_WEIGHT * totalDueDatePenalty;
-        return 1 / (totalFitness + 1); // 适应度值
+        const totalFitness = maxEndTime + DUE_DATE_WEIGHT * totalDueDatePenalty + conflictPenalty;
+        return 1 / (totalFitness + 1);
     }
 
-    // 选择操作：轮盘赌选择，根据适应度值选择个体进入下一代
+    // 选择、交叉、变异操作保持不变
     function selection(population) {
-        const fitnessValues = population.map(individual => fitnessFunction(individual));
-        const totalFitness = fitnessValues.reduce((sum, fitness) => sum + fitness, 0);
-        const probabilities = fitnessValues.map(fitness => fitness / totalFitness);
+        const fitnessValues = population.map(fitnessFunction);
+        const totalFitness = fitnessValues.reduce((sum, f) => sum + f, 0);
+        const probabilities = fitnessValues.map(f => f / totalFitness);
 
-        const selectedPopulation = [];
-        // 选择 POP_SIZE 个个体
-        for (let i = 0; i < POP_SIZE; i++) {
-            let r = Math.random();
-            let cumulativeProbability = 0;
-            for (let j = 0; j < POP_SIZE; j++) {
-                cumulativeProbability += probabilities[j];
-                if (r <= cumulativeProbability) {
-                    selectedPopulation.push(population[j]);
-                    break;
-                }
+        return Array(POP_SIZE).fill().map(() => {
+            const r = Math.random();
+            let cp = 0;
+            for (let i = 0; i < POP_SIZE; i++) {
+                cp += probabilities[i];
+                if (r <= cp) return population[i];
             }
-        }
-        return selectedPopulation;
-    }
-
-    // 交叉操作：单点交叉，生成新的个体
-    function crossover(parent1, parent2) {
-        const crossoverPoint = Math.floor(Math.random() * parent1.length);
-        const child1 = parent1.slice(0, crossoverPoint).concat(parent2.slice(crossoverPoint));
-        const child2 = parent2.slice(0, crossoverPoint).concat(parent1.slice(crossoverPoint));
-        return [child1, child2];
-    }
-
-    // 变异操作：随机改变一个工序的设备或开始时间
-    function mutation(individual) {
-        const availableDevices = getAvailableDevices();
-        if (availableDevices.length === 0) {
-            return individual;
-        }
-        // 以 MUTATION_RATE 的概率对每个工序进行变异
-        individual.forEach(schedule => {
-            if (Math.random() < MUTATION_RATE) {
-                if (Math.random() < 0.5) {
-                    schedule.deviceId = availableDevices[Math.floor(Math.random() * availableDevices.length)].id;
-                } else {
-                    schedule.startTime = Math.floor(Math.random() * 100);
-                }
-            }
+            return population[0];
         });
-        return individual;
     }
 
-    // 主循环，迭代 GENERATIONS 次
-    let population = initializePopulation(orders, devices); // 修正调用参数
-    for (let generation = 0; generation < GENERATIONS; generation++) {
-        const selectedPopulation = selection(population);
-        const newPopulation = [];
-        // 生成新的种群
+    function crossover(p1, p2) {
+        const point = Math.floor(Math.random() * p1.length);
+        return [
+            [...p1.slice(0, point), ...p2.slice(point)],
+            [...p2.slice(0, point), ...p1.slice(point)]
+        ];
+    }
+
+    function mutation(individual) {
+        return individual.map(schedule => {
+            if (Math.random() < MUTATION_RATE) {
+                const order = orders.find(o => o.id === schedule.orderId);
+                const matchingDevices = getMatchingDevices(order.name, order.type);
+                if (matchingDevices.length > 0 && Math.random() < 0.5) {
+                    return {
+                        ...schedule,
+                        deviceId: matchingDevices[Math.floor(Math.random() * matchingDevices.length)].id
+                    };
+                } else {
+                    return {
+                        ...schedule,
+                        startTime: Math.floor(Math.random() * 100)
+                    };
+                }
+            }
+            return schedule;
+        });
+    }
+
+    // 主算法循环
+    let population = initializePopulation(orders, devices);
+    for (let gen = 0; gen < GENERATIONS; gen++) {
+        const selected = selection(population);
+        const newPop = [];
         for (let i = 0; i < POP_SIZE; i += 2) {
-            const parent1 = selectedPopulation[i];
-            const parent2 = selectedPopulation[i + 1];
-            const [child1, child2] = crossover(parent1, parent2);
-            newPopulation.push(mutation(child1));
-            newPopulation.push(mutation(child2));
+            const [c1, c2] = crossover(selected[i], selected[i+1]);
+            newPop.push(mutation(c1), mutation(c2));
         }
-        population = newPopulation;
+        population = newPop;
     }
 
-    // 选择最优个体，即适应度最高的个体
-    const bestIndividual = population.reduce((best, current) => {
-        return fitnessFunction(current) > fitnessFunction(best) ? current : best;
-    });
+    // 选择最优解
+    const best = population.reduce((b, c) => fitnessFunction(c) > fitnessFunction(b) ? c : b);
 
-    // 时间格式化函数，将时间戳转换为 'YYYY-MM-DD' 格式的日期
-    function formatDate(timestamp) {
-        const baseDate = new Date(); // 从当前日期开始计算
-        const newDate = new Date(baseDate.getTime() + timestamp * 24 * 60 * 60 * 1000);
-        const year = newDate.getFullYear();
-        const month = String(newDate.getMonth() + 1).padStart(2, '0');
-        const day = String(newDate.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+    // 格式化日期
+    function formatDate(days) {
+        const date = new Date();
+        date.setDate(date.getDate() + days);
+        return date.toISOString().split('T')[0];
     }
 
-    return bestIndividual.map((schedule, index) => {
+    // 创建一个映射，记录每个设备处理的订单
+    const deviceOrderMap = new Map();
+    
+    // 首先处理所有订单，确保所有订单都在排产中
+    const result = [];
+    
+    // 先处理所有订单，分配设备和工序
+    best.forEach(schedule => {
         const order = orders.find(o => o.id === schedule.orderId);
         const device = devices.find(d => d.id === schedule.deviceId);
         const process = PROCESS_LIST.find(p => p.id === schedule.processId);
-        const startTime = formatDate(schedule.startTime);
-        const endTime = formatDate(schedule.startTime + process.duration);
         
-        // 获取可用设备数量
-        const availableDevices = getAvailableDevices();
-        const availableDeviceCount = availableDevices.length;
-
-        let status;
-        if (index < availableDeviceCount) {
-            // 前 availableDeviceCount 个分配为进行中状态
-            status = 0;
-        } else {
-            // 随机分配 1 或 -1 状态
-            status = Math.random() < 0.5 ? 1 : -1;
+        if (!order || !device || !process) return;
+        
+        // 检查设备是否已经分配了订单
+        if (!deviceOrderMap.has(device.id)) {
+            deviceOrderMap.set(device.id, {
+                orderId: order.id,
+                status: device.status === 'true' ? 0 : 1 // 如果设备可用，状态为0（进行中），否则为1（等待）
+            });
         }
-
-        return {
-            name: `${order.name}`,
-            start_time: startTime,
-            end_time: endTime,
-            status: status,
+        
+        result.push({
+            name: order.name,
+            start_time: formatDate(schedule.startTime),
+            end_time: formatDate(schedule.startTime + process.duration),
+            status: 1, // 默认设置为等待状态
             process: process.name,
             device: device.name
-        };
+        });
     });
+    
+    // 然后更新状态，确保每个设备只处理一个订单为进行中状态
+    result.forEach(item => {
+        const device = devices.find(d => d.name === item.device);
+        if (device) {
+            const deviceOrder = deviceOrderMap.get(device.id);
+            if (deviceOrder && deviceOrder.orderId === orders.find(o => o.name === item.name)?.id && deviceOrder.status === 0) {
+                item.status = 0; // 设置为进行中状态
+            }
+        }
+    });
+    
+    return result;
 }
 
 module.exports = schedulingAlgorithm;

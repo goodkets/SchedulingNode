@@ -13,40 +13,70 @@ exports.getSchedulingData = async (req, res) => {
         // 从请求参数中获取页码和每页数量，设置默认值
         const page = parseInt(req.body.page) || 1;
         const pageSize = parseInt(req.body.pageSize) || 10;
+        const device = req.body.productName || '';
         const offset = (page - 1) * pageSize;
-    
-        // 构建查询 SQL 语句
-        const countSql = `SELECT COUNT(*) AS total FROM scheduling`;
-        const dataSql = `SELECT id, name, start_time, end_time, status, process, device 
+        if (device === '') {
+            // 构建查询 SQL 语句
+            const countSql = `SELECT COUNT(*) AS total FROM scheduling`;
+            const dataSql = `SELECT id, name, start_time, end_time, status, process, device 
                          FROM scheduling 
                          LIMIT ? OFFSET ?`;
-        
-        // 执行查询操作 - 传递数字参数而非字符串
-        const [countResult] = await db.query(countSql);
-        const [results] = await db.query(dataSql, [pageSize, offset]); // 直接传递数字
-    
-        const total = parseInt(countResult[0].total, 10);
-        const totalPages = Math.ceil(total / pageSize);
 
-        res.send({
-          status: 0,
-          message: '数据查询成功',
-          data: {
-            items: results,
-            pagination: {
-              page,
-              pageSize,
-              total,
-              totalPages
-            }
-          }
-        });
+            // 执行查询操作 - 传递数字参数而非字符串
+            const [countResult] = await db.query(countSql);
+            const [results] = await db.query(dataSql, [pageSize, offset]); // 直接传递数字
+
+            const total = parseInt(countResult[0].total, 10);
+            const totalPages = Math.ceil(total / pageSize);
+
+            res.send({
+                status: 0,
+                message: '数据查询成功',
+                data: {
+                    items: results,
+                    pagination: {
+                        page,
+                        pageSize,
+                        total,
+                        totalPages
+                    }
+                }
+            });
+        } else {
+            //productName值可能是继电器机床、电容机床、电阻机床，对应数据表的device字段，根据这个字段查询数据
+            // 构建查询 SQL 语句
+            const countSql = `SELECT COUNT(*) AS total FROM scheduling WHERE device = ?`;
+            const dataSql = `SELECT id, name, start_time, end_time, status, process, device
+                     FROM scheduling
+                     WHERE device = ?
+                     LIMIT ? OFFSET ?`;  // 添加了分页参数
+
+            // 执行查询操作 - 传递数字参数而非字符串
+            const [countResult] = await db.query(countSql, [device]);
+            const [results] = await db.query(dataSql, [device, pageSize, offset]); // 注意参数顺序
+            const total = parseInt(countResult[0].total, 10);
+            const totalPages = Math.ceil(total / pageSize);
+
+            res.send({
+                status: 0,
+                message: '数据查询成功',
+                data: {
+                    items: results,
+                    pagination: {
+                        page,
+                        pageSize,
+                        total,
+                        totalPages
+                    }
+                }
+            });
+        }
     } catch (err) {
         console.error('错误信息:', err);
         res.status(500).send({
-          status: 1,
-          message: '查询数据时发生错误',
-          error: err.message
+            status: 1,
+            message: '查询数据时发生错误',
+            error: err.message
         });
     }
 };

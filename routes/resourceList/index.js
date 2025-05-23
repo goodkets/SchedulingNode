@@ -365,16 +365,6 @@ exports.updateResourceAndWorkerStatus = async (req, res) => {
       
       const [workerIdResult] = await connection.execute(getWorkerIdSql, [id]);
       
-      if (workerIdResult.length === 0 || !workerIdResult[0].worker_id) {
-        // 如果没有关联的worker_id，则只更新资源状态
-        await connection.commit();
-        return res.send({
-          status: 0,
-          message: '资源状态更新成功，无关联员工',
-          affectedRows: resourceResult.affectedRows
-        });
-      }
-      
       const worker_id = workerIdResult[0].worker_id;
       // 3. 根据资源状态更新workerlist表中的员工状态
       if (status === 'false') { 
@@ -413,10 +403,11 @@ exports.updateResourceAndWorkerStatus = async (req, res) => {
       await connection.commit();
           // 导入手动执行 SQL 写入的方法
     const { manualExecuteSqlWrite } = require('../scheduling/index');
+    // console.log('手动执行 SQL 写入...',req,res);
     await manualExecuteSqlWrite(req, res);
       res.send({
         status: 0,
-        message: '资源和员工状态更新成功',
+        message: '资源状态更新成功',
         affectedRows: resourceResult.affectedRows
       });
     } catch (err) {
@@ -431,7 +422,7 @@ exports.updateResourceAndWorkerStatus = async (req, res) => {
     console.error('错误信息:', err);
     res.send({
       status: 1,
-      message: '更新资源和员工状态时发生错误',
+      message: '更新资源时发生错误',
       error: err.message
     });
   }
@@ -553,7 +544,8 @@ exports.getRawMaterialCount = async (req, res) => {
 }
 
 //修改原材料总数
-exports.updateRawMaterialCount = async (req, res) => { 
+exports.updateRawMaterialCount = async (req, res) => {
+  console.log('修改原材料总数接口被调用',req.body); 
   try {
     const rawArrayList = req.body;
 

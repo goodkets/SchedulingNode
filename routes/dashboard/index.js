@@ -5,7 +5,7 @@ exports.orderProgress = async (req, res) => {
       const sql = "SELECT * FROM purchase";
       const sql1 = "SELECT * FROM resource";
       // 使用 await 执行查询
-      const [results] = await db.query(sql); // 注意这里是数组解构
+      const [results] = await db.query(sql); // 注意这里是数组解构---订单
       const [results1] = await db.query(sql1); // 注意这里是数组解构
   
       // 提取 status=1 且 priority=1 的订单
