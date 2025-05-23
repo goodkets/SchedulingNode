@@ -1,5 +1,9 @@
 // 调度算法实现
 function schedulingAlgorithm(orders, devices) {
+    // 过滤出未完成的订单
+    const activeOrders = orders.filter(order => order.status !== '1');
+    // 过滤出已完成的订单
+    const completedOrders = orders.filter(order => order.status === '1');
     // 参数设置
     const POP_SIZE = 50; // 种群大小
     const GENERATIONS = 100; // 迭代次数
@@ -37,7 +41,7 @@ function schedulingAlgorithm(orders, devices) {
         const population = [];
         for (let i = 0; i < POP_SIZE; i++) {
             const individual = [];
-            orders.forEach(order => {
+            activeOrders.forEach(order => { // 使用过滤后的订单
                 const matchingDevices = getMatchingDevices(order.name, order.type);
                 if (matchingDevices.length === 0) return;
                 
@@ -46,6 +50,7 @@ function schedulingAlgorithm(orders, devices) {
                 const startTime = Math.floor(Math.random() * 100);
                 individual.push({
                     orderId: order.id,
+                    orderNo: order.order_no, // 确保正确获取 orderNo
                     processId: process.id,
                     deviceId: device.id,
                     startTime
@@ -152,7 +157,7 @@ function schedulingAlgorithm(orders, devices) {
     }
 
     // 主算法循环
-    let population = initializePopulation(orders, devices);
+    let population = initializePopulation(activeOrders, devices); // 使用过滤后的订单
     for (let gen = 0; gen < GENERATIONS; gen++) {
         const selected = selection(population);
         const newPop = [];
@@ -179,29 +184,57 @@ function schedulingAlgorithm(orders, devices) {
     // 首先处理所有订单，确保所有订单都在排产中
     const result = [];
     
-    // 先处理所有订单，分配设备和工序
+    // 先处理未完成订单，分配设备和工序
     best.forEach(schedule => {
-        const order = orders.find(o => o.id === schedule.orderId);
+        const order = activeOrders.find(o => o.id === schedule.orderId); // 使用过滤后的订单
         const device = devices.find(d => d.id === schedule.deviceId);
         const process = PROCESS_LIST.find(p => p.id === schedule.processId);
         
         if (!order || !device || !process) return;
         
+        // 动态检查设备状态
+        const isDeviceActive = device.status === 'true';
+        
         // 检查设备是否已经分配了订单
         if (!deviceOrderMap.has(device.id)) {
             deviceOrderMap.set(device.id, {
                 orderId: order.id,
-                status: device.status === 'true' ? 0 : 1 // 如果设备可用，状态为0（进行中），否则为1（等待）
+                status: isDeviceActive ? 0 : 1 // 如果设备可用，状态为0（进行中），否则为1（等待）
             });
         }
         
         result.push({
+            orderId: order.id, // 添加 orderId 字段
+            orderNo: schedule.orderNo, // 添加 orderNo 字段
             name: order.name,
             start_time: formatDate(schedule.startTime),
             end_time: formatDate(schedule.startTime + process.duration),
-            status: 1, // 默认设置为等待状态
+            status: isDeviceActive ? 0 : 1, // 根据设备状态设置订单状态
             process: process.name,
             device: device.name
+        });
+    });
+
+    // 处理已完成订单，参考 best 的写法添加到结果中
+    completedOrders.forEach(order => {
+        // 根据订单 type 从设备列表中提取匹配的设备
+        const matchingDevice = devices.find(device => device.type === order.type);
+        const deviceName = matchingDevice ? matchingDevice.name : '';
+        const isDeviceActive = matchingDevice ? matchingDevice.status === 'true' : false;
+
+        // 假设已完成订单有 startTime 字段，如果没有可以根据实际情况调整
+        const startTime = order.startTime !== undefined ? order.startTime : 0; 
+        const process = PROCESS_LIST[Math.floor(Math.random() * PROCESS_LIST.length)]; // 随机选择一个工序，可根据实际情况调整
+
+        result.push({
+            orderId: order.id, // 添加 orderId 字段
+            orderNo: order.order_no, // 添加 orderNo 字段
+            name: order.name,
+            start_time: formatDate(startTime),
+            end_time: formatDate(startTime + process.duration),
+            status: isDeviceActive ? 0 : 1,
+            process: '无',
+            device: deviceName
         });
     });
     
@@ -209,9 +242,12 @@ function schedulingAlgorithm(orders, devices) {
     result.forEach(item => {
         const device = devices.find(d => d.name === item.device);
         if (device) {
+            const isDeviceActive = device.status === 'true';
             const deviceOrder = deviceOrderMap.get(device.id);
-            if (deviceOrder && deviceOrder.orderId === orders.find(o => o.name === item.name)?.id && deviceOrder.status === 0) {
+            if (deviceOrder && deviceOrder.orderId === orders.find(o => o.name === item.name)?.id && isDeviceActive) {
                 item.status = 0; // 设置为进行中状态
+            } else {
+                item.status = 1; // 设置为等待状态
             }
         }
     });

@@ -24,10 +24,11 @@ exports.getPurchaseData = async (req, res) => {
 
     if (searchParam) {
       if (orderNoRegex.test(searchParam)) {
-        order_no = searchParam;
+        // 模糊查询订单号
+        order_no = `%${searchParam}%`;
       } else {
-        // 只要不是订单号格式，都按产品名称精确查询
-        name = searchParam;
+        // 模糊查询产品名称
+        name = `%${searchParam}%`;
       }
     }
 
@@ -38,13 +39,13 @@ exports.getPurchaseData = async (req, res) => {
     if (order_no || name) {
       let conditions = [];
       if (order_no) {
-        // 修改为精确查询
-        conditions.push('order_no = ?');
+        // 使用 LIKE 进行模糊查询
+        conditions.push('order_no LIKE ?');
         params.push(order_no);
       }
       if (name) {
-        // 修改为精确查询
-        conditions.push('name = ?');
+        // 使用 LIKE 进行模糊查询
+        conditions.push('name LIKE ?');
         params.push(name);
       }
       const whereClause = ' WHERE ' + conditions.join(' AND ');
@@ -114,10 +115,11 @@ exports.addPurchaseData = async (req, res) => {
 
     // 生成 0 - 10 之间的随机数作为 product_id
     const product_id = Math.floor(Math.random() * 11);
-
+    //生成20-90的随机整数
+    const progress = Math.floor(Math.random() * 71) + 20;
     // 构建插入 SQL 语句
-    const sql = `INSERT INTO purchase (name, order_no, product_id, quantity, due_data, status, priority, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-    const params = [name, order_no, product_id, quantity, due_data, status, priority, type];
+    const sql = `INSERT INTO purchase (name, order_no, product_id, quantity, due_data, status, priority, type, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const params = [name, order_no, product_id, quantity, due_data, status, priority, type, progress];
 
     // 执行插入操作
     const [result] = await db.execute(sql, params);
@@ -169,9 +171,12 @@ exports.deletePurchaseData = async (req, res) => {
     const [result] = await db.execute(sql, params);
 
     if (result.affectedRows === 1) {
+      // 导入手动执行 SQL 写入的方法
+      const { manualExecuteSqlWrite } = require('../scheduling/index');
+      await manualExecuteSqlWrite(req, res);
       res.send({
         status: 0,
-        message: '订单删除成功',
+        message: '订单删除成功，已执行排产操作',
       });
     } else {
       res.send({

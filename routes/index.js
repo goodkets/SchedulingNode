@@ -16,13 +16,11 @@ router.post('/getResourceData', resourceRouter.getResourceData)//设备管理数
 router.post('/updateResourceStatus', resourceRouter.updateResourceStatus)//修改设备状态
 router.post('/updateRowStatus', resourceRouter.updateRowStatus)//修改人员状态
 router.post('/updateResourceAndWorkerStatus', resourceRouter.updateResourceAndWorkerStatus)//修改设备状态并同步更新员工状态
-router.post('/updateWorkerNum', resourceRouter.updateWorkerNum)//修改材料数量
-router.post('/addWorker', resourceRouter.addWorker)//添加工人
-router.post('/deleteWorker', resourceRouter.deleteWorker)//删除工人
 router.post('/getRawMaterialCount', resourceRouter.getRawMaterialCount)//原材料总数查询
 router.post('/updateRawMaterialCount', resourceRouter.updateRawMaterialCount)//修改原材料数量
 router.post("/orderProgress", dashboard.orderProgress)//订单进度
 router.post("/manualExecuteSqlWrite", scheduling.manualExecuteSqlWrite)//手动执行SQL写入
+router.post("/updateSchedulingData", scheduling.updateSchedulingData)//修改排产信息状态
 
 module.exports = router;
 

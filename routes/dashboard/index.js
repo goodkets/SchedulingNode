@@ -35,7 +35,8 @@ exports.orderProgress = async (req, res) => {
           list: filteredOrders,
           totalOrders: totalOrders.length,
           deliveredOrders: deliveredOrders.length,
-          inProgressData:inProgressData
+          inProgressData:inProgressData,
+          trueCount
         }
       });
     } catch (err) {
